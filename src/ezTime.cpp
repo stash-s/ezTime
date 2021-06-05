@@ -1,3 +1,5 @@
+#include <functional>
+
 #include <Arduino.h>
 
 #include <ezTime.h>
@@ -76,10 +78,12 @@ namespace {
 	uint16_t _last_read_ms;
 	timeStatus_t _time_status;
 	bool _initialised = false;
-	#ifdef EZTIME_NETWORK_ENABLE
-		uint16_t _ntp_interval = NTP_INTERVAL;
-		String _ntp_server = NTP_SERVER;
-	#endif
+	std::function<void(void)> _ntp_update_start_cb;
+	std::function<void(bool)> _ntp_update_end_cb;
+#ifdef EZTIME_NETWORK_ENABLE
+	uint16_t _ntp_interval = NTP_INTERVAL;
+	String _ntp_server = NTP_SERVER;
+#endif
 
 	void triggerError(const ezError_t err) {
 		_last_error = err;
@@ -374,6 +378,8 @@ namespace ezt {
 	#ifdef EZTIME_NETWORK_ENABLE
 
 		void updateNTP() {
+			if (_ntp_update_start_cb) _ntp_update_start_cb();
+			
 			deleteEvent(updateNTP);	// Delete any events pointing here, in case called manually
 			time_t t;
 			unsigned long measured_at;
@@ -401,12 +407,21 @@ namespace ezt {
 				}
 				if (_ntp_interval) UTC.setEvent(updateNTP, t + _ntp_interval);
 				_time_status = timeSet;
+
+				if (_ntp_update_end_cb)
+					_ntp_update_end_cb(true);
+				
+
 			} else {
 			        if ( nowUTC(false) > _last_sync_time + _ntp_interval + NTP_STALE_AFTER ) {
 			        	_time_status = timeNeedsSync;
 			        }
 				UTC.setEvent(updateNTP, nowUTC(false) + NTP_RETRY);
+
+				if (_ntp_update_end_cb) 
+					_ntp_update_end_cb(false);
 			}
+						
 		}
 
 		// This is a nice self-contained NTP routine if you need one: feel free to use it.
@@ -841,7 +856,7 @@ String Timezone::getPosix() { return _posix; }
 		info(F(" ms)  "));
 		if (recv.substring(0,6) == "ERROR ") {
 			_server_error = recv.substring(6);
-			error (SERVER_ERROR);
+			triggerError(SERVER_ERROR);
 			return false;
 		}
 		if (recv.substring(0,3) == "OK ") {
@@ -856,7 +871,7 @@ String Timezone::getPosix() { return _posix; }
 			#endif
 			return true;
 		}
-		error (DATA_NOT_FOUND);
+		triggerError(DATA_NOT_FOUND);
 		return false;
 	}
 	
@@ -1509,4 +1524,9 @@ namespace ezt {
 	uint8_t weekday(time_t t /* = TIME_NOW */, const ezLocalOrUTC_t local_or_utc /* = LOCAL_TIME */) { return (defaultTZ->weekday(t, local_or_utc)); }
 	uint16_t year(time_t t /* = TIME_NOW */, const ezLocalOrUTC_t local_or_utc /* = LOCAL_TIME */) { return (defaultTZ->year(t, local_or_utc)); } 
 	uint16_t yearISO(time_t t /* = TIME_NOW */, const ezLocalOrUTC_t local_or_utc /* = LOCAL_TIME */) { return (defaultTZ->yearISO(t, local_or_utc)); }
+
+	void onNtpUpdateStart(std::function<void(void)> callback) { _ntp_update_start_cb = callback; }
+	void onNtpUpdateEnd(std::function<void(bool)> callback) { _ntp_update_end_cb = callback; }
 }
+
+

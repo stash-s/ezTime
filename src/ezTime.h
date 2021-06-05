@@ -312,6 +312,9 @@ namespace ezt {
 	uint8_t weekday(time_t t = TIME_NOW, const ezLocalOrUTC_t local_or_utc = LOCAL_TIME);
 	uint16_t year(time_t t = TIME_NOW, const ezLocalOrUTC_t local_or_utc = LOCAL_TIME); 
 	uint16_t yearISO(time_t t = TIME_NOW, const ezLocalOrUTC_t local_or_utc = LOCAL_TIME);
+
+	void onNtpUpdateStart(std::function<void()>);
+	void onNtpUpdateEnd  (std::function<void(bool)>);
 }
 
 #ifndef EZTIME_EZT_NAMESPACE
